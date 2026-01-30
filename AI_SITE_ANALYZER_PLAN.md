@@ -204,12 +204,19 @@ Detailed specs for each core component are available in the `specs/` folder:
 - [x] Spec AI provider abstraction
 - [x] Spec dashboard + CLI
 - [x] Spec database and storage infrastructure
-- [ ] Begin implementation (ground truth extractor first)
+- [x] Begin implementation (ground truth extractor first)
+- [x] Implement AI provider abstraction
+- [x] Implement query generator
+- [x] Implement response analyzer
+- [x] Implement analysis runner
+- [x] Build CLI interface
 - [ ] Build minimal dashboard to visualize results
+- [ ] Add embedding generation and vector search
 - [ ] Test with a few real sites to validate approach
+- [ ] Add historical tracking and trends
 
 ---
 
 *Document created: 2026-01-30*
 *Last updated: 2026-01-30*
-*Status: Technical Specs Complete - Ready for Implementation Planning*
+*Status: Core Implementation Complete - Dashboard Next*
