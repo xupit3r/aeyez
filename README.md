@@ -31,23 +31,50 @@ Aeyez provides analytics on three key metrics:
 - 🚧 Dashboard (next)
 - 📋 Historical tracking (planned)
 
+## Documentation
+
+- **[USAGE.md](USAGE.md)** - Complete user guide with examples
+- **[DATABASE_SETUP.md](DATABASE_SETUP.md)** - PostgreSQL + pgvector setup
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Developer documentation
+- **[Technical Approach & Plan](AI_SITE_ANALYZER_PLAN.md)** - Architecture overview
+- **[Technical Specifications](specs/)** - Detailed component specs
+
 ## Quick Start
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup and usage instructions.
+### 1. Prerequisites
+
+- PostgreSQL 15+ with pgvector extension
+- Redis 6+
+- Node.js 18+
+- API keys (OpenAI and/or Google)
+
+See [DATABASE_SETUP.md](DATABASE_SETUP.md) for detailed setup instructions.
+
+### 2. Installation
 
 ```bash
+# Clone repository
+git clone <repo-url>
+cd aeyez
+
 # Install dependencies
 npm install
 
 # Set up environment
 cp .env.example .env
-# Edit .env with your database and API credentials
+# Edit .env with your credentials
 
 # Run migrations
 npm run db:migrate
+```
 
-# Run full analysis pipeline
-npm run dev site:add example.com
+### 3. Run Analysis
+
+```bash
+# Add your site
+npm run dev site:add example.com --name "My Site"
+
+# Run complete pipeline
 npm run dev pipeline <siteId>
 
 # View results
@@ -68,16 +95,30 @@ npm run dev stats <siteId>
 npm run dev results <runId>
 ```
 
-## Documentation
+## Features
 
-- [Technical Approach & Plan](AI_SITE_ANALYZER_PLAN.md)
-- [Technical Specifications](specs/)
-  - [Ground Truth Extractor](specs/ground-truth-extractor.md)
-  - [Query Generator](specs/query-generator.md)
-  - [Response Analyzer](specs/response-analyzer.md)
-  - [AI Provider Abstraction](specs/ai-provider-abstraction.md)
-  - [Dashboard + CLI](specs/dashboard-cli.md)
-  - [Database & Storage](specs/database-storage.md)
+### Automated Analysis
+- Crawls websites with JavaScript rendering
+- Extracts content and key claims
+- Generates diverse test queries automatically
+- Queries multiple AI providers
+- Scores responses on accuracy, completeness, and attribution
+
+### Multi-Provider Support
+- OpenAI (GPT-4o-mini)
+- Google (Gemini 1.5 Flash)
+- Extensible architecture for additional providers
+
+### Comprehensive Scoring
+- **Accuracy**: Semantic similarity analysis
+- **Completeness**: Required claims verification
+- **Attribution**: URL, domain, and brand mention detection
+
+### Developer-Friendly
+- Full TypeScript implementation
+- Prisma ORM for type-safe database access
+- Comprehensive CLI
+- Detailed logging and error handling
 
 ## Tech Stack
 
