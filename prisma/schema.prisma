@@ -1,0 +1,321 @@
+// Aeyez Database Schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+// ============================================================================
+// SITES & PAGES
+// ============================================================================
+
+enum SiteStatus {
+  PENDING  // Not yet crawled
+  CRAWLING // Crawl in progress
+  READY    // Ready for analysis
+  ERROR    // Crawl failed
+}
+
+model Site {
+  id     String     @id @default(cuid())
+  domain String     @unique
+  name   String?
+  config Json // SiteConfig: topics, providers, query count
+
+  // Status
+  status      SiteStatus @default(PENDING)
+  lastCrawlAt DateTime?
+  lastRunAt   DateTime?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  pages   Page[]
+  queries Query[]
+  runs    Run[]
+
+  @@index([domain])
+  @@index([status])
+}
+
+model Page {
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  // Page info
+  url   String
+  title String?
+
+  // Crawl metadata
+  httpStatus      Int?
+  etag            String?
+  lastModified    String?
+  sitemapPriority Float?
+
+  // Content (stored in file storage, reference here)
+  rawHtmlPath String? // Path to stored HTML file
+
+  // Extraction status
+  extractedAt       DateTime?
+  extractionVersion String?
+
+  // Timestamps
+  crawledAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  chunks Chunk[]
+  claims Claim[]
+
+  @@unique([siteId, url])
+  @@index([siteId, crawledAt])
+}
+
+// ============================================================================
+// CONTENT EXTRACTION
+// ============================================================================
+
+model Chunk {
+  id     String @id @default(cuid())
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  // Content
+  text        String
+  heading     String?
+  sectionType String // 'hero', 'content', 'sidebar', etc.
+  depth       Int    // Heading hierarchy depth
+  tokenCount  Int
+
+  // Position in page
+  position Int // Order within page
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  // Relations
+  embeddings Embedding[]
+  claims     Claim[]
+
+  @@index([pageId, position])
+}
+
+model Embedding {
+  id      String                      @id @default(cuid())
+  chunkId String
+  chunk   Chunk                       @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  // Embedding data
+  modelName String                           // e.g., 'text-embedding-3-small'
+  vector    Unsupported("vector(1536)") // pgvector type
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@unique([chunkId, modelName])
+  @@index([chunkId])
+}
+
+model Claim {
+  id      String  @id @default(cuid())
+  pageId  String
+  page    Page    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  chunkId String?
+  chunk   Chunk?  @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+
+  // Claim content
+  statement String // Full claim text
+  subject   String? // e.g., "Company"
+  predicate String? // e.g., "founded in"
+  object    String? // e.g., "2020"
+
+  // Metadata
+  claimType  String // 'fact', 'feature', 'statistic', etc.
+  confidence Float  // 0-1 extraction confidence
+  source     String // 'nlp', 'llm', 'schema'
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@index([pageId])
+  @@index([chunkId])
+}
+
+// ============================================================================
+// QUERIES
+// ============================================================================
+
+enum QueryType {
+  INFORMATIONAL
+  NAVIGATIONAL
+  COMPARISON
+  TRANSACTIONAL
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model Query {
+  id         String   @id @default(cuid())
+  siteId     String
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  // Query content
+  canonical  String   // Primary query text
+  variations String[] // Alternative phrasings
+
+  // Classification
+  queryType     QueryType
+  topic         String
+  difficulty    Difficulty
+  priorityScore Float
+
+  // Expected answer
+  expectedAnswer Json // ExpectedAnswer object
+
+  // Source tracking
+  sourcePageUrls String[]
+  sourceClaimIds String[]
+  clusterId      String?
+
+  // Status
+  enabled Boolean @default(true)
+
+  // Versioning
+  groundTruthVersion String
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  results Result[]
+
+  @@index([siteId, enabled])
+  @@index([siteId, queryType])
+  @@index([priorityScore])
+}
+
+// ============================================================================
+// ANALYSIS RUNS & RESULTS
+// ============================================================================
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Run {
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  // Run configuration
+  config Json // RunConfig: providers, query count, etc.
+
+  // Status
+  status   RunStatus @default(PENDING)
+  progress Int       @default(0) // Completed queries
+  total    Int       @default(0) // Total queries
+
+  // Timing
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  // Error tracking
+  error String?
+
+  // Summary scores (denormalized for fast access)
+  summaryScores Json? // { accuracy: 78, completeness: 65, attribution: 42 }
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  results Result[]
+
+  @@index([siteId, createdAt])
+  @@index([status])
+}
+
+model Result {
+  id      String @id @default(cuid())
+  runId   String
+  run     Run    @relation(fields: [runId], references: [id], onDelete: Cascade)
+  queryId String
+  query   Query  @relation(fields: [queryId], references: [id], onDelete: Cascade)
+
+  // AI Response
+  provider String // 'openai', 'google'
+  model    String // 'gpt-4o-mini', 'gemini-1.5-flash'
+  response String // Full response text
+
+  // Token usage
+  inputTokens  Int
+  outputTokens Int
+
+  // Cost
+  cost Float // USD
+
+  // Latency
+  latencyMs Int
+
+  // Scores
+  accuracyScore     Float
+  completenessScore Float
+  attributionScore  Float
+
+  // Detailed feedback (stored as JSON for flexibility)
+  feedback Json // ClaimFeedback, HighlightFeedback
+
+  // Timestamps
+  respondedAt DateTime
+  analyzedAt  DateTime @default(now())
+
+  @@unique([runId, queryId, provider])
+  @@index([runId])
+  @@index([queryId])
+  @@index([accuracyScore])
+  @@index([completenessScore])
+  @@index([attributionScore])
+}
+
+// ============================================================================
+// SETTINGS
+// ============================================================================
+
+model Settings {
+  id String @id @default("default")
+
+  // API Keys (consider encryption in production)
+  providers Json // { openai: { apiKey: "..." }, google: { apiKey: "..." } }
+
+  // Defaults
+  defaults Json // { queriesPerRun: 50, providers: ["openai", "google"] }
+
+  // Notifications
+  notifications Json // { email: "...", alertThreshold: 10 }
+
+  // Appearance
+  theme String @default("system")
+
+  // Timestamps
+  updatedAt DateTime @updatedAt
+}

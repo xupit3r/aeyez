@@ -1,0 +1,47 @@
+{
+  "name": "aeyez",
+  "version": "1.0.0",
+  "description": "A tool that helps website owners understand how conversational AI search engines (ChatGPT, Perplexity, Google AI Overviews, etc.) interpret, summarize, and represent their content.",
+  "main": "dist/index.js",
+  "bin": {
+    "aeyez": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli/index.ts",
+    "start": "node dist/cli/index.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ai",
+    "seo",
+    "analytics",
+    "search"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "25.1.0",
+    "nodemon": "3.1.11",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@paralleldrive/cuid2": "3.3.0",
+    "@prisma/client": "7.3.0",
+    "axios": "1.13.4",
+    "bullmq": "5.67.2",
+    "cheerio": "1.2.0",
+    "commander": "14.0.2",
+    "cuid": "3.0.0",
+    "dotenv": "17.2.3",
+    "ioredis": "5.9.2",
+    "playwright": "1.58.0",
+    "prisma": "7.3.0"
+  }
+}
