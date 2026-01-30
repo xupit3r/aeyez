@@ -51,10 +51,12 @@ export class ResponseAnalyzer {
       claimEmbeddings
     );
 
-    // Calculate completeness score
+    // Calculate completeness score (hybrid: semantic + keyword)
     const completenessResult = this.calculateCompleteness(
       aiResponse,
-      expectedAnswer
+      expectedAnswer,
+      responseEmbedding,
+      claimEmbeddings
     );
 
     // Calculate attribution score
@@ -112,27 +114,42 @@ export class ResponseAnalyzer {
 
   private calculateCompleteness(
     response: string,
-    expectedAnswer: ExpectedAnswer
+    expectedAnswer: ExpectedAnswer,
+    responseEmbedding: number[],
+    claimEmbeddings: number[][]
   ): ScoreBreakdown['completeness'] {
     const responseLower = response.toLowerCase();
-    
-    // Check which required claims are mentioned
-    const mentionedClaims = expectedAnswer.keyClaims.filter(claim =>
-      this.isClaimMentioned(claim, responseLower)
-    );
 
-    const missingClaims = expectedAnswer.keyClaims.filter(claim =>
-      !this.isClaimMentioned(claim, responseLower)
-    );
+    // Hybrid check: a claim is "found" if either semantic OR keyword passes
+    const foundClaims: string[] = [];
+    const missingClaims: string[] = [];
+
+    for (let i = 0; i < expectedAnswer.keyClaims.length; i++) {
+      const claim = expectedAnswer.keyClaims[i];
+
+      // Semantic check: cosine similarity > 0.75 threshold
+      const semanticFound = i < claimEmbeddings.length
+        ? cosineSimilarity(responseEmbedding, claimEmbeddings[i]) > 0.75
+        : false;
+
+      // Keyword check: existing isClaimMentioned as secondary signal
+      const keywordFound = this.isClaimMentioned(claim, responseLower);
+
+      if (semanticFound || keywordFound) {
+        foundClaims.push(claim);
+      } else {
+        missingClaims.push(claim);
+      }
+    }
 
     // Check for required keywords
     const mentionedKeywords = expectedAnswer.keywords.filter(keyword =>
       responseLower.includes(keyword.toLowerCase())
     );
 
-    // Calculate score
+    // Calculate score: 70% claim coverage + 30% keyword coverage
     const claimScore = expectedAnswer.keyClaims.length > 0
-      ? mentionedClaims.length / expectedAnswer.keyClaims.length
+      ? foundClaims.length / expectedAnswer.keyClaims.length
       : 1;
 
     const keywordScore = expectedAnswer.keywords.length > 0
@@ -144,7 +161,7 @@ export class ResponseAnalyzer {
     return {
       score: Math.round(score),
       details: {
-        mentionedClaims: mentionedClaims.length,
+        mentionedClaims: foundClaims.length,
         requiredClaims: expectedAnswer.keyClaims.length,
         missingClaims: missingClaims.slice(0, 5), // Limit to 5 for readability
       },

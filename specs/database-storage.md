@@ -15,11 +15,8 @@ See source code:
 - Local file storage for raw HTML
 - Database helper functions for vector operations (`insertEmbedding`, `findSimilarChunks` in `db.ts`)
 
-**Embeddings table — schema exists, never populated:**
-The `Embedding` model with `vector(1536)` is defined in the schema, and raw SQL helpers exist for insertion and similarity search. However, no code in the pipeline ever calls these functions. Embeddings are generated on-the-fly during analysis and discarded. This means:
-- Repeated analysis of the same ground truth regenerates identical embeddings (wasted API cost)
-- The semantic search capabilities designed for the dashboard are non-functional
-- The query clustering/dedup pipeline can't work without stored embeddings
+**Embeddings table — now populated during extraction:**
+The `Embedding` model with `vector(1536)` is defined in the schema, and raw SQL helpers exist for insertion and similarity search. The `generateAndPersistEmbeddings()` method in `ground-truth.ts` now calls `insertEmbedding()` for each chunk during content extraction, using OpenAI text-embedding-3-small (1536d vectors). Google embeddings (768d) are skipped as incompatible with the schema. Uses `ON CONFLICT DO UPDATE` so re-runs are safe. `findSimilarChunks()` is available for future semantic search wiring.
 
 **Redis — configured but unused:**
 The `redis.ts` library file exists and `ioredis` is installed, but no service reads from or writes to Redis. The cache keys, job queues, rate limit keys, and pub/sub channels defined in this spec are not implemented. All operations run synchronously in the foreground.

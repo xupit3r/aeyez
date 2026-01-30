@@ -154,12 +154,12 @@ Detailed specs for each core component are available in the `specs/` folder. Eac
 
 | Component | Spec File | Impl Status | Key Gaps |
 |-----------|-----------|-------------|----------|
-| Ground Truth Extractor | [`specs/ground-truth-extractor.md`](specs/ground-truth-extractor.md) | ⚠️ Partial | Claim extraction is sentence-splitting placeholder; structured data extracted but unused; no embeddings generated |
+| Ground Truth Extractor | [`specs/ground-truth-extractor.md`](specs/ground-truth-extractor.md) | ✅ Complete | LLM claim extraction with structured data claims; embedding persistence via OpenAI text-embedding-3-small |
 | Query Generator | [`specs/query-generator.md`](specs/query-generator.md) | ⚠️ Partial | LLM generation works; no clustering/dedup/variations; hardcoded prompt; no source tracking |
-| Response Analyzer | [`specs/response-analyzer.md`](specs/response-analyzer.md) | ⚠️ Caveats | All 3 scorers work; completeness uses keyword matching not semantic similarity; scoring unvalidated against real sites |
+| Response Analyzer | [`specs/response-analyzer.md`](specs/response-analyzer.md) | ✅ Complete | All 3 scorers work; completeness uses hybrid semantic (0.75 threshold) + keyword matching; scoring unvalidated against real sites |
 | AI Provider Abstraction | [`specs/ai-provider-abstraction.md`](specs/ai-provider-abstraction.md) | ✅ Complete | OpenAI + Google working; no unified orchestrator class; consider Perplexity/Anthropic |
 | Dashboard + CLI | [`specs/dashboard-cli.md`](specs/dashboard-cli.md) | ⚠️ CLI only | CLI fully functional; web dashboard 0%; needs API server (Express/Fastify) before frontend |
-| Database & Storage | [`specs/database-storage.md`](specs/database-storage.md) | ⚠️ Partial | Schema complete; embeddings table never populated; Redis/BullMQ/S3 unused |
+| Database & Storage | [`specs/database-storage.md`](specs/database-storage.md) | ⚠️ Partial | Schema complete; embeddings now populated (OpenAI 1536d); Redis/BullMQ/S3 unused |
 
 ### Key Technical Decisions Made
 
@@ -219,17 +219,17 @@ Detailed specs for each core component are available in the `specs/` folder. Eac
 - [ ] Document which scores feel correct and which feel off — this informs every other priority
 - [ ] Measure actual API costs per site analysis to understand economics
 
-### Priority 2: Fix claim extraction (highest-impact code change)
-- [ ] Replace sentence-splitting in `ground-truth.ts` with LLM-based extraction using the prompt template in the ground truth extractor spec (Section 4)
-- [ ] Generate structured claims with subject/predicate/object triples and confidence scores
-- [ ] Use extracted structured data (JSON-LD, OpenGraph) as an additional source of high-quality claims
+### Priority 2: Fix claim extraction (highest-impact code change) ✅
+- [x] Replace sentence-splitting in `ground-truth.ts` with LLM-based extraction using the prompt template in the ground truth extractor spec (Section 4)
+- [x] Generate structured claims with subject/predicate/object triples and confidence scores
+- [x] Use extracted structured data (JSON-LD, OpenGraph) as an additional source of high-quality claims
 - [ ] Re-run analysis after fixing claims and compare score quality to Priority 1 baseline
 
-### Priority 3: Wire up embedding persistence
-- [ ] Call `insertEmbedding()` during ground truth extraction to persist chunk embeddings
+### Priority 3: Wire up embedding persistence ✅
+- [x] Call `insertEmbedding()` during ground truth extraction to persist chunk embeddings
 - [ ] Update response analyzer to check for existing embeddings before generating new ones
 - [ ] Enable `findSimilarChunks()` for semantic search in the query generator and analyzer
-- [ ] Upgrade completeness scorer from keyword matching to semantic similarity using stored embeddings
+- [x] Upgrade completeness scorer from keyword matching to semantic similarity (hybrid approach with 0.75 threshold)
 
 ### Priority 4: Add tests
 - [ ] Unit tests for response-analyzer.ts scoring logic (the core IP of the product)
@@ -259,4 +259,4 @@ Detailed specs for each core component are available in the `specs/` folder. Eac
 
 *Document created: 2026-01-30*
 *Last updated: 2026-01-30*
-*Status: Core CLI Pipeline Working - Validation & Claim Extraction Next*
+*Status: LLM Claim Extraction, Embedding Persistence, and Semantic Completeness Implemented - Validation Next*

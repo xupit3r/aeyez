@@ -1,6 +1,6 @@
 ## Implementation Status
 
-⚠️ **Implemented with caveats** - All three scorers work, but completeness uses keyword matching instead of semantic similarity, and scoring methodology needs real-world validation
+✅ **Implemented** - All three scorers work with semantic similarity; completeness now uses hybrid semantic + keyword matching
 
 See source code:
 - Database schema: `prisma/schema.prisma`
@@ -12,19 +12,13 @@ See source code:
 
 **What works:**
 - Accuracy scoring via embedding cosine similarity (claims with similarity >0.7 count as accurate)
-- Completeness scoring via keyword/claim presence detection
+- **Completeness scoring via hybrid semantic + keyword matching** — uses cosine similarity (threshold 0.75) as the primary signal, with keyword matching (`isClaimMentioned`) as a secondary signal. A claim is "found" if either passes. Formula: `(found_claims / required) * 0.7 + (keywords_found / required) * 0.3`.
 - Attribution scoring via URL (+60), domain (+30), and brand name (+10) detection, capped at 100
 - Detailed feedback with evidence for each scored claim
 - Integration with analysis runner for batch processing
 
 **Accuracy scorer — functional but blunt:**
-The spec describes chunking long responses and comparing chunk-by-chunk. The implementation embeds key claims and the full response, then computes cosine similarity. The formula is `(accurate_claims / total) * 0.7 + avg_similarity * 0.3`. This works but is sensitive to the quality of the claims being compared. Since claims are currently just raw sentences (see ground-truth-extractor review), the accuracy score may not be meaningful. **This needs validation against real sites where you know what the "right" score should be.**
-
-**Completeness scorer — uses keyword matching, not semantic similarity:**
-The spec calls for embedding each claim and comparing via semantic similarity (threshold 0.75). The implementation uses case-insensitive substring matching instead: it checks whether keywords and claim text literally appear in the response. This means paraphrased mentions are missed. For example, if the ground truth says "founded in 2020" and the AI response says "established in 2020", the current implementation may not count it as found. The formula is `(mentioned_claims / required) * 0.7 + (keywords_found / required) * 0.3`.
-
-**Embeddings generated on-the-fly and discarded:**
-Both accuracy and completeness scorers generate embeddings per analysis run but don't persist them. Re-running analysis against the same ground truth regenerates identical embeddings at additional API cost. Wiring up the existing `insertEmbedding`/`findSimilarChunks` helpers would fix this.
+The spec describes chunking long responses and comparing chunk-by-chunk. The implementation embeds key claims and the full response, then computes cosine similarity. The formula is `(accurate_claims / total) * 0.7 + avg_similarity * 0.3`. This works but is sensitive to the quality of the claims being compared. Now that claims are LLM-extracted with subject/predicate/object structure, accuracy scores should be more meaningful. **Still needs validation against real sites.**
 
 **Attribution scorer — solid for MVP:**
 The rule-based approach (URL > domain > brand) is practical and deterministic. The main limitation is that it can't detect indirect attribution (e.g., "according to a cloud computing company" when that company is yours). This is acceptable for now.

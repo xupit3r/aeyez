@@ -1,6 +1,6 @@
 ## Implementation Status
 
-⚠️ **Partially Implemented** - Crawler and chunker work, but claim extraction is a placeholder
+✅ **Implemented** - Crawler, chunker, LLM claim extraction, structured data claims, and embedding persistence all working
 
 See source code:
 - Database schema: `prisma/schema.prisma`
@@ -17,17 +17,9 @@ See source code:
 - JSON-LD, OpenGraph, and meta tag extraction
 - Raw HTML stored to local filesystem
 - Site status tracking (PENDING → CRAWLING → READY/ERROR)
-
-**Critical gap — Claim extraction:**
-The spec calls for a hybrid NLP + LLM fact extractor producing structured subject/predicate/object triples with confidence scores. The current implementation (`ground-truth.ts`) simply splits text on sentence delimiters (`.!?`) and treats each sentence >20 characters as a "claim" with no subject/predicate/object parsing, no confidence scoring, and no claim type classification. This is the single highest-impact gap in the system because both completeness scoring and accuracy scoring depend on claim quality. Garbage claims produce garbage scores.
-
-**Recommended fix:** Use the existing OpenAI integration to send chunks with the LLM extraction prompt already defined in this spec (Section 4). The `QueryGeneratorService` already follows this pattern and can serve as a template. Start with LLM-only extraction; add NLP entity extraction later if cost becomes a concern.
-
-**Structured data extracted but unused:**
-The extractor pulls JSON-LD, OpenGraph, and meta tags from pages, but this data is never saved to the database or used for claim generation. This is low-hanging fruit — schema.org data often contains precise, structured facts (founding date, employee count, product names) that would produce high-quality claims without LLM costs.
-
-**Embeddings not generated during extraction:**
-The spec describes an embedding step after chunking. The Prisma schema and raw SQL helpers exist (`insertEmbedding`, `findSimilarChunks` in `db.ts`), but they are never called. Embeddings are generated on-the-fly during analysis and discarded. Persisting them would avoid redundant API calls across runs.
+- **LLM-based claim extraction** — sends chunks to OpenAI (Google fallback) with a factual extraction prompt, producing structured claims with subject/predicate/object triples, confidence scores, and source='llm'. Falls back to sentence-splitting (source='nlp', confidence 0.5) on LLM/parse failure. Oversized chunks (>1500 tokens) are split before extraction.
+- **Structured data claims** — JSON-LD properties (name, description, foundingDate, numberOfEmployees, address, offers/products), OpenGraph meta (title, description), and microdata items are automatically converted to claims with source='schema' and confidence 0.85-0.95 during content extraction. No LLM calls needed.
+- **Embedding persistence** — chunk embeddings are generated via OpenAI text-embedding-3-small (1536d) and stored to the embeddings table during content extraction using `insertEmbedding()`. Uses `ON CONFLICT DO UPDATE` for safe re-runs. Google embeddings (768d) are skipped as incompatible with the DB schema.
 
 **Token counting is approximate:**
 Token count uses `text.length / 4`, which can be off by 30-50% depending on content. Not critical for MVP but worth noting for cost estimates.
