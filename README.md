@@ -15,7 +15,39 @@ Aeyez provides analytics on three key metrics:
 
 ## Status
 
-🚧 **Planning Phase** - Technical specifications complete, implementation pending.
+🚧 **Active Development** - Core infrastructure complete, implementing analysis components.
+
+### Implementation Progress
+
+- ✅ Database schema and migrations
+- ✅ Web crawler with Playwright
+- ✅ Content extraction and chunking
+- ✅ Ground truth service
+- ✅ CLI interface
+- 🚧 Query generator (next)
+- 🚧 AI provider abstraction (next)
+- 🚧 Response analyzer (next)
+- 📋 Dashboard (planned)
+
+## Quick Start
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup and usage instructions.
+
+```bash
+# Install dependencies
+npm install
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your database credentials
+
+# Run migrations
+npm run db:migrate
+
+# Add a site and crawl
+npm run dev site:add example.com
+npm run dev crawl <siteId>
+```
 
 ## Documentation
 
