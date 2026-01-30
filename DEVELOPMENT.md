@@ -62,9 +62,33 @@ npm run dev crawl <siteId>
 npm run dev crawl <siteId> --pages 100
 ```
 
+#### Generate test queries
+```bash
+npm run dev generate-queries <siteId>
+npm run dev generate-queries <siteId> --count 100
+```
+
+#### Run AI analysis
+```bash
+npm run dev analyze <siteId>
+npm run dev analyze <siteId> --providers openai --count 25
+```
+
+#### View analysis results
+```bash
+npm run dev results <runId>
+npm run dev results <runId> --json
+```
+
 #### Show site statistics
 ```bash
 npm run dev stats <siteId>
+```
+
+#### Run full pipeline (all-in-one)
+```bash
+npm run dev pipeline <siteId>
+npm run dev pipeline <siteId> --pages 100 --queries 50 --providers openai,google
 ```
 
 ## Development
@@ -76,10 +100,17 @@ src/
 ├── cli/           # Command-line interface
 ├── lib/           # Core libraries (db, config, utils)
 ├── services/      # Business logic services
+│   ├── ai/               # AI provider implementations
+│   │   ├── base.ts       # Base provider interface
+│   │   ├── openai.ts     # OpenAI implementation
+│   │   ├── google.ts     # Google Gemini implementation
+│   │   └── index.ts      # Provider factory
 │   ├── crawler.ts        # Web crawler
 │   ├── extractor.ts      # Content extraction
 │   ├── ground-truth.ts   # Ground truth orchestration
-│   └── ...               # More services coming
+│   ├── query-generator.ts # Query generation
+│   ├── response-analyzer.ts # Response scoring
+│   └── analysis-runner.ts  # Analysis orchestration
 └── types/         # TypeScript type definitions
 
 prisma/
@@ -120,20 +151,23 @@ The application uses PostgreSQL with the following main tables:
 - Web crawler with Playwright
 - Content extraction with Cheerio
 - Ground truth service
-- Basic CLI commands
+- AI provider abstraction (OpenAI, Google)
+- Query generator
+- Response analyzer
+- Analysis runner
+- Full CLI interface
 
 ### 🚧 In Progress
-- Query generator
-- AI provider abstraction
-- Response analyzer
-- Dashboard
+- Dashboard (web UI)
+- Embedding generation and vector search
 
 ### 📋 Planned
-- Embedding generation
-- Advanced claim extraction
-- Analysis runner
-- Web dashboard
+- Advanced claim extraction (NLP/LLM-based)
+- Real-time analysis monitoring
+- Report generation
 - API endpoints
+- Multi-site comparison
+- Historical trend analysis
 
 ## Testing
 

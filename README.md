@@ -15,7 +15,7 @@ Aeyez provides analytics on three key metrics:
 
 ## Status
 
-🚧 **Active Development** - Core infrastructure complete, implementing analysis components.
+🚧 **Active Development** - Core analysis engine complete and functional!
 
 ### Implementation Progress
 
@@ -23,11 +23,13 @@ Aeyez provides analytics on three key metrics:
 - ✅ Web crawler with Playwright
 - ✅ Content extraction and chunking
 - ✅ Ground truth service
-- ✅ CLI interface
-- 🚧 Query generator (next)
-- 🚧 AI provider abstraction (next)
-- 🚧 Response analyzer (next)
-- 📋 Dashboard (planned)
+- ✅ AI provider abstraction (OpenAI, Google)
+- ✅ Query generator
+- ✅ Response analyzer
+- ✅ Analysis runner
+- ✅ Full CLI interface
+- 🚧 Dashboard (next)
+- 📋 Historical tracking (planned)
 
 ## Quick Start
 
@@ -39,14 +41,31 @@ npm install
 
 # Set up environment
 cp .env.example .env
-# Edit .env with your database credentials
+# Edit .env with your database and API credentials
 
 # Run migrations
 npm run db:migrate
 
-# Add a site and crawl
+# Run full analysis pipeline
 npm run dev site:add example.com
-npm run dev crawl <siteId>
+npm run dev pipeline <siteId>
+
+# View results
+npm run dev stats <siteId>
+```
+
+## Example Workflow
+
+```bash
+# 1. Add a site
+npm run dev site:add anthropic.com --name "Anthropic" --topics "ai,llm,claude"
+
+# 2. Run the complete pipeline
+npm run dev pipeline <siteId> --pages 50 --queries 30
+
+# 3. View results
+npm run dev stats <siteId>
+npm run dev results <runId>
 ```
 
 ## Documentation
