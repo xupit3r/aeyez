@@ -1,0 +1,46 @@
+# Aeyez - AI Site Interpretation Analyzer
+
+A tool that helps website owners understand how conversational AI search engines (ChatGPT, Perplexity, Google AI Overviews, etc.) interpret, summarize, and represent their content.
+
+## Problem
+
+Website owners have no visibility into how AI agents represent their content to users. This is an emerging SEO/visibility challenge with no established solutions.
+
+## Solution
+
+Aeyez provides analytics on three key metrics:
+- **Accuracy** - Is the AI saying correct things about your site?
+- **Completeness** - Are key features/products/information being mentioned?
+- **Attribution** - Is your site being cited as a source?
+
+## Status
+
+🚧 **Planning Phase** - Technical specifications complete, implementation pending.
+
+## Documentation
+
+- [Technical Approach & Plan](AI_SITE_ANALYZER_PLAN.md)
+- [Technical Specifications](specs/)
+  - [Ground Truth Extractor](specs/ground-truth-extractor.md)
+  - [Query Generator](specs/query-generator.md)
+  - [Response Analyzer](specs/response-analyzer.md)
+  - [AI Provider Abstraction](specs/ai-provider-abstraction.md)
+  - [Dashboard + CLI](specs/dashboard-cli.md)
+  - [Database & Storage](specs/database-storage.md)
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Runtime | TypeScript / Node.js |
+| Database | PostgreSQL + pgvector |
+| ORM | Prisma |
+| Cache/Queue | Redis |
+| Web Crawler | Playwright |
+| Frontend | Vue 3 + Vuetify + Pinia |
+| CLI | Commander.js |
+| AI Providers | OpenAI, Google Gemini |
+
+## License
+
+TBD

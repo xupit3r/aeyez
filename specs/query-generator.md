@@ -1,0 +1,598 @@
+# Query Generator - Technical Specification
+
+## Overview
+The Query Generator creates prompts to send to AI systems for testing how they represent a website's content. It produces queries with rich metadata including expected answers, enabling downstream accuracy scoring.
+
+## Responsibilities
+1. Generate queries from ground truth data and/or user-provided topics
+2. Create diverse query types (informational, navigational, comparison, transactional)
+3. Attach expected answers and metadata to each query
+4. Deduplicate queries via clustering
+5. Support configurable variation strategies
+6. Regenerate incrementally when ground truth changes
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       Query Generator                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                    Input Sources                          │   │
+│  │  ┌─────────────┐          ┌─────────────┐               │   │
+│  │  │Ground Truth │          │ User Topics │               │   │
+│  │  │   (claims,  │          │ (keywords,  │               │   │
+│  │  │  entities)  │          │  phrases)   │               │   │
+│  │  └─────────────┘          └─────────────┘               │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                  Generation Pipeline                      │   │
+│  │  ┌───────────┐   ┌───────────┐   ┌───────────┐          │   │
+│  │  │ Template  │──▶│    LLM    │──▶│ Variation │          │   │
+│  │  │  Engine   │   │ Enhancer  │   │ Generator │          │   │
+│  │  └───────────┘   └───────────┘   └───────────┘          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                 Post-Processing                           │   │
+│  │  ┌───────────┐   ┌───────────┐   ┌───────────┐          │   │
+│  │  │ Clustering│──▶│  Dedup &  │──▶│ Priority  │          │   │
+│  │  │           │   │  Select   │   │  Ranking  │          │   │
+│  │  └───────────┘   └───────────┘   └───────────┘          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              Expected Answer Builder                      │   │
+│  │  ┌───────────┐   ┌───────────┐   ┌───────────┐          │   │
+│  │  │Full Text  │   │Key Claims │   │ Embedding │          │   │
+│  │  │  Answer   │   │   List    │   │  Vector   │          │   │
+│  │  └───────────┘   └───────────┘   └───────────┘          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Components
+
+### 1. Input Sources
+
+#### Ground Truth Source
+Pulls from the Ground Truth Extractor output:
+- Extracted claims (subject-predicate-object triples)
+- Named entities (organizations, products, people, etc.)
+- Page content chunks
+- Structured data (schema.org, meta tags)
+
+#### User Topics Source
+User-provided keywords and phrases:
+- Brand/company names
+- Product names
+- Key features
+- Industry terms
+- Competitor names (for comparison queries)
+
+**Interface**:
+```typescript
+interface QuerySource {
+  type: 'ground-truth' | 'user-topics' | 'both';
+  groundTruth?: {
+    domain: string;
+    pageFilter?: string[];  // Specific URLs to focus on
+  };
+  userTopics?: {
+    keywords: string[];
+    phrases: string[];
+    competitors?: string[];
+  };
+}
+```
+
+---
+
+### 2. Query Types
+
+#### Informational Queries
+Questions seeking knowledge about the site/company.
+
+**Templates**:
+```
+"What is {entity}?"
+"How does {product/feature} work?"
+"What does {company} do?"
+"Explain {concept} from {company}"
+"{entity} overview"
+```
+
+#### Navigational Queries
+Intent to find specific pages or information.
+
+**Templates**:
+```
+"{company} website"
+"{company} pricing"
+"{company} contact"
+"{product} documentation"
+"{company} {page_type}"
+```
+
+#### Comparison Queries
+Comparing the site/product to alternatives.
+
+**Templates**:
+```
+"{company} vs {competitor}"
+"{product} alternatives"
+"Best {category} tools"
+"{company} compared to {competitor}"
+"Is {product} better than {competitor_product}?"
+```
+
+#### Transactional Queries
+Intent to take action or make decisions.
+
+**Templates**:
+```
+"{product} reviews"
+"Buy {product}"
+"{company} free trial"
+"Sign up for {service}"
+"{product} pricing plans"
+```
+
+**Interface**:
+```typescript
+type QueryType = 'informational' | 'navigational' | 'comparison' | 'transactional';
+
+interface QueryTemplate {
+  type: QueryType;
+  pattern: string;           // e.g., "What is {entity}?"
+  requiredVariables: string[];
+  optionalVariables?: string[];
+}
+```
+
+---
+
+### 3. Template Engine
+**Purpose**: Generate base queries from templates + extracted data
+
+**Process**:
+1. Load query templates by type
+2. Extract variables from ground truth (entities, claims, products)
+3. Substitute variables into templates
+4. Tag each query with source metadata
+
+**Interface**:
+```typescript
+interface TemplateEngine {
+  loadTemplates(): QueryTemplate[];
+  generateFromTemplate(
+    template: QueryTemplate, 
+    variables: Record<string, string>
+  ): string;
+  generateAll(source: QuerySource): RawQuery[];
+}
+
+interface RawQuery {
+  text: string;
+  type: QueryType;
+  sourceTemplate: string;
+  variables: Record<string, string>;
+  sourcePageUrl?: string;
+  sourceClaimId?: string;
+}
+```
+
+---
+
+### 4. LLM Enhancer
+**Purpose**: Make template-generated queries more natural and diverse
+
+**Process**:
+1. Take batch of template queries
+2. Ask LLM to rephrase for naturalness
+3. Generate additional queries LLM thinks are relevant
+4. Validate generated queries are on-topic
+
+**LLM Prompt**:
+```
+You are helping generate search queries about {domain}.
+
+Here are some template-generated queries:
+{template_queries}
+
+For each query:
+1. Rephrase it to sound more natural (how a real person would ask)
+2. Suggest 1-2 related queries that weren't covered
+
+Return JSON with original, rephrased, and related queries.
+Keep queries focused on factual information about {domain}.
+```
+
+**Interface**:
+```typescript
+interface LLMEnhancer {
+  enhance(queries: RawQuery[], domain: string): Promise<EnhancedQuery[]>;
+}
+
+interface EnhancedQuery extends RawQuery {
+  naturalPhrasing: string;
+  relatedQueries?: string[];
+}
+```
+
+---
+
+### 5. Variation Generator
+**Purpose**: Create multiple phrasings of the same query intent
+
+**Strategies** (user-configurable):
+- **None**: Single canonical phrasing only
+- **Template variations**: Apply different templates to same variables
+- **LLM variations**: Ask LLM to generate N phrasings
+- **Synonym substitution**: Replace key terms with synonyms
+
+**Interface**:
+```typescript
+type VariationStrategy = 'none' | 'template' | 'llm' | 'synonym' | 'all';
+
+interface VariationConfig {
+  strategy: VariationStrategy;
+  maxVariationsPerQuery: number;  // Default: 3
+}
+
+interface QueryWithVariations {
+  canonical: string;
+  variations: string[];
+  intent: string;  // Shared intent identifier
+}
+
+interface VariationGenerator {
+  generate(query: EnhancedQuery, config: VariationConfig): Promise<QueryWithVariations>;
+}
+```
+
+---
+
+### 6. Clustering & Deduplication
+**Purpose**: Remove redundant queries while maintaining coverage
+
+**Algorithm**:
+1. Embed all queries using embedding provider
+2. Cluster queries by semantic similarity (e.g., HDBSCAN or k-means)
+3. For each cluster, select representative query (closest to centroid)
+4. Preserve cluster metadata for coverage analysis
+
+**Interface**:
+```typescript
+interface QueryCluster {
+  id: string;
+  representative: QueryWithVariations;
+  members: QueryWithVariations[];
+  centroidEmbedding: number[];
+  topic: string;  // Inferred topic label
+}
+
+interface ClusteringConfig {
+  similarityThreshold: number;  // Default: 0.85
+  minClusterSize: number;       // Default: 2
+}
+
+interface QueryClusterer {
+  cluster(queries: QueryWithVariations[], config: ClusteringConfig): Promise<QueryCluster[]>;
+  selectRepresentatives(clusters: QueryCluster[]): QueryWithVariations[];
+}
+```
+
+---
+
+### 7. Priority Ranking
+**Purpose**: Rank queries by importance when budget is limited
+
+**Ranking Factors**:
+1. **Page priority** (from sitemap): Higher priority pages → higher query priority
+2. **Query type coverage**: Ensure all types are represented
+3. **Topic coverage**: Spread across different topics/entities
+4. **User topic boost**: User-provided keywords get priority boost
+
+**Algorithm**:
+```
+score = (sitemap_priority * 0.4) + 
+        (type_diversity_bonus * 0.2) + 
+        (topic_coverage_bonus * 0.2) + 
+        (user_topic_boost * 0.2)
+```
+
+**Interface**:
+```typescript
+interface PriorityConfig {
+  maxQueries: number;           // Budget limit
+  typeDistribution?: {          // Optional: enforce distribution
+    informational: number;      // Percentage
+    navigational: number;
+    comparison: number;
+    transactional: number;
+  };
+  userTopicBoost: number;       // Default: 1.5x multiplier
+}
+
+interface QueryPrioritizer {
+  rank(queries: QueryWithVariations[], config: PriorityConfig): RankedQuery[];
+  selectTopN(queries: RankedQuery[], n: number): RankedQuery[];
+}
+
+interface RankedQuery extends QueryWithVariations {
+  priorityScore: number;
+  rankFactors: {
+    sitemapPriority: number;
+    typeDiversityBonus: number;
+    topicCoverageBonus: number;
+    userTopicBoost: number;
+  };
+}
+```
+
+---
+
+### 8. Expected Answer Builder
+**Purpose**: Attach expected answers to each query for accuracy scoring
+
+**Output Formats**:
+
+#### Full Text Answer
+Best possible answer based on ground truth content.
+```typescript
+interface FullTextAnswer {
+  text: string;              // Complete answer text
+  sourceChunkIds: string[];  // Chunks used to construct answer
+  confidence: number;        // How confident we are this is correct
+}
+```
+
+#### Key Claims List
+Specific facts that should appear in the answer.
+```typescript
+interface ExpectedClaim {
+  statement: string;         // e.g., "Founded in 2020"
+  importance: 'required' | 'expected' | 'optional';
+  sourceClaimId: string;
+}
+```
+
+#### Embedding Vector
+Semantic representation for similarity matching.
+```typescript
+interface AnswerEmbedding {
+  vector: number[];
+  modelName: string;
+}
+```
+
+**Interface**:
+```typescript
+interface ExpectedAnswer {
+  fullText: FullTextAnswer;
+  claims: ExpectedClaim[];
+  embedding: AnswerEmbedding;
+}
+
+interface ExpectedAnswerBuilder {
+  build(query: RankedQuery, groundTruth: StoredPage[]): Promise<ExpectedAnswer>;
+}
+```
+
+---
+
+### 9. Final Query Object
+
+```typescript
+interface GeneratedQuery {
+  id: string;
+  domain: string;
+  
+  // Query content
+  canonical: string;
+  variations: string[];
+  
+  // Classification
+  type: QueryType;
+  topic: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  
+  // Expected answer
+  expectedAnswer: ExpectedAnswer;
+  
+  // Metadata
+  priorityScore: number;
+  sourcePageUrls: string[];
+  sourceClaimIds: string[];
+  clusterId: string;
+  
+  // Timestamps
+  generatedAt: Date;
+  groundTruthVersion: string;  // Track which GT version was used
+}
+```
+
+---
+
+## Incremental Regeneration
+
+**Purpose**: Update queries only for changed ground truth content
+
+**Algorithm**:
+```
+on ground_truth_update(changed_pages):
+  affected_queries = queries where sourcePageUrls intersects changed_pages
+  
+  for each affected_query:
+    regenerate expected answer from new ground truth
+    if source claims deleted:
+      mark query for review or deletion
+    if new claims available:
+      potentially generate new queries
+  
+  run deduplication on new + existing queries
+  re-rank all queries
+```
+
+**Interface**:
+```typescript
+interface QueryRegenerator {
+  detectAffectedQueries(changedPageUrls: string[]): Promise<GeneratedQuery[]>;
+  regenerate(queries: GeneratedQuery[], newGroundTruth: StoredPage[]): Promise<GeneratedQuery[]>;
+  generateNew(newGroundTruth: StoredPage[], existingQueries: GeneratedQuery[]): Promise<GeneratedQuery[]>;
+}
+```
+
+---
+
+## Configuration
+
+```typescript
+interface QueryGeneratorConfig {
+  // Source configuration
+  source: QuerySource;
+  
+  // Generation settings
+  generation: {
+    queryTypes: QueryType[];           // Default: all
+    templatesPerType: number;          // Default: 10
+    llmEnhancement: boolean;           // Default: true
+  };
+  
+  // Variation settings
+  variation: VariationConfig;
+  
+  // Clustering settings
+  clustering: ClusteringConfig;
+  
+  // Priority settings  
+  priority: PriorityConfig;
+  
+  // Provider settings
+  providers: {
+    llm: 'openai' | 'anthropic';
+    llmModel?: string;                 // Default: gpt-4o-mini
+    embedding: 'openai' | 'local';
+    embeddingModel?: string;
+  };
+}
+```
+
+---
+
+## Storage Schema
+
+```typescript
+interface StoredQuerySet {
+  id: string;
+  domain: string;
+  generatedAt: Date;
+  config: QueryGeneratorConfig;
+  groundTruthVersion: string;
+  
+  queries: GeneratedQuery[];
+  clusters: QueryCluster[];
+  
+  stats: {
+    totalGenerated: number;
+    afterDeduplication: number;
+    byType: Record<QueryType, number>;
+    byTopic: Record<string, number>;
+  };
+}
+```
+
+---
+
+## API
+
+```typescript
+interface QueryGenerator {
+  // Main generation
+  generate(config: QueryGeneratorConfig): Promise<StoredQuerySet>;
+  
+  // Incremental update
+  regenerate(
+    existingSet: StoredQuerySet, 
+    changedPages: string[]
+  ): Promise<StoredQuerySet>;
+  
+  // Query selection for testing
+  selectForRun(
+    querySet: StoredQuerySet, 
+    options: {
+      count: number;
+      types?: QueryType[];
+      useVariations: boolean;
+    }
+  ): GeneratedQuery[];
+  
+  // Preview without saving
+  preview(config: QueryGeneratorConfig, limit: number): Promise<GeneratedQuery[]>;
+}
+```
+
+---
+
+## Error Handling
+
+| Error Type | Handling |
+|------------|----------|
+| Ground truth not found | Error - must run extractor first |
+| No entities/claims extracted | Warn, fall back to user topics only |
+| LLM enhancement fails | Fall back to template-only queries |
+| Clustering fails | Skip dedup, warn about potential duplicates |
+| Empty query set | Error - check source configuration |
+
+---
+
+## Metrics
+
+Track:
+- Queries generated per domain
+- Distribution by type and topic
+- Deduplication ratio (pre/post clustering)
+- LLM tokens used
+- Generation time
+- Query coverage score (% of ground truth represented)
+
+---
+
+## Dependencies
+
+```json
+{
+  "dependencies": {
+    "openai": "^4.0.0",
+    "@anthropic-ai/sdk": "^0.10.0",
+    "ml-kmeans": "^6.0.0",
+    "umap-js": "^1.3.0"
+  }
+}
+```
+
+---
+
+## Open Questions
+
+- [ ] How to handle multilingual sites/queries?
+- [ ] Should we support query scheduling (different queries at different times)?
+- [ ] How to validate query quality before use?
+- [ ] Support for image/multimedia queries in future?
+
+---
+
+*Spec Version: 1.0*
+*Created: 2026-01-30*
+*Status: Draft*
