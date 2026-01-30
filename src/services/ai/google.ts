@@ -16,7 +16,7 @@ export class GoogleProvider extends BaseAIProvider {
     const startTime = Date.now();
 
     const model = this.client.getGenerativeModel({
-      model: this.config.model || 'gemini-1.5-flash',
+      model: this.config.model || 'gemini-2.5-flash',
     });
 
     // Convert messages to Gemini format
@@ -53,7 +53,7 @@ export class GoogleProvider extends BaseAIProvider {
     return {
       content: text,
       provider: this.name,
-      model: this.config.model || 'gemini-1.5-flash',
+      model: this.config.model || 'gemini-2.5-flash',
       inputTokens,
       outputTokens,
       cost: this.calculateCost(inputTokens, outputTokens),

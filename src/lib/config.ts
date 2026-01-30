@@ -43,7 +43,7 @@ export const config = {
     },
     google: {
       apiKey: process.env.GOOGLE_API_KEY || '',
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       temperature: 0.7,
       maxTokens: 8192,
       timeout: 30000,
@@ -72,7 +72,7 @@ export const config = {
 
   // Analysis
   analysis: {
-    defaultProviders: ['openai', 'google'] as ('openai' | 'google')[],
+    defaultProviders: ['openai'] as ('openai' | 'google')[],
     maxRetries: 3,
     retryDelay: 1000,
   },

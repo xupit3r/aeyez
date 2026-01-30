@@ -42,11 +42,14 @@ export class QueryGeneratorService {
     const config = site.config as any;
     const topics = config.topics || ['general'];
 
-    // Generate queries using AI
-    const provider = createProvider('openai'); // Use OpenAI for query generation
+    // Generate queries using AI (try OpenAI, fall back to Google)
+    let provider = createProvider('openai');
+    if (!provider.isAvailable()) {
+      provider = createProvider('google');
+    }
 
     if (!provider.isAvailable()) {
-      throw new Error('OpenAI provider not available. Set OPENAI_API_KEY in .env');
+      throw new Error('No AI provider available. Set OPENAI_API_KEY or GOOGLE_API_KEY in .env');
     }
 
     // Sample content for context
@@ -92,22 +95,41 @@ Return as a JSON array with this structure:
 
 Focus on queries that test accuracy, completeness, and attribution.`;
 
-    console.log('\nGenerating queries with AI...');
+    console.log(`\nGenerating queries with ${provider.name}...`);
 
-    const response = await provider.query({
+    const queryRequest = {
       messages: [
         {
-          role: 'system',
+          role: 'system' as const,
           content: 'You are a query generation assistant. Always respond with valid JSON only.',
         },
         {
-          role: 'user',
+          role: 'user' as const,
           content: prompt,
         },
       ],
       temperature: 0.8,
       maxTokens: 4096,
-    });
+    };
+
+    let response;
+    try {
+      response = await provider.query(queryRequest);
+    } catch (error: any) {
+      // If OpenAI fails (e.g. quota exceeded), try Google
+      if (provider.name === 'openai') {
+        console.log(`OpenAI failed (${error.message}), falling back to Google...`);
+        const fallback = createProvider('google');
+        if (fallback.isAvailable()) {
+          provider = fallback;
+          response = await fallback.query(queryRequest);
+        } else {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    }
 
     console.log(`AI response received (${response.inputTokens} input, ${response.outputTokens} output tokens)`);
     console.log(`Cost: $${response.cost.toFixed(4)}`);

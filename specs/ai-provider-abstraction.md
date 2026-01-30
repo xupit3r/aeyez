@@ -1,12 +1,34 @@
 ## Implementation Status
 
-✅ **Implemented** - Core functionality complete as of 2026-01-30
+✅ **Implemented** - OpenAI and Google providers work with rate limiting, retry, and cost tracking
 
 See source code:
 - Database schema: `prisma/schema.prisma`
-- Services: `src/services/`
+- Services: `src/services/ai/base.ts`, `src/services/ai/openai.ts`, `src/services/ai/google.ts`
 - CLI: `src/cli/index.ts`
 - Types: `src/types/index.ts`
+
+### Implementation Review (2026-01-30)
+
+**What works:**
+- OpenAI provider (GPT-4o-mini default, text-embedding-3-small for embeddings)
+- Google Gemini provider (Gemini 1.5 Flash default, text-embedding-004 for embeddings)
+- Per-provider rate limiting (requests/min, tokens/min)
+- Exponential backoff retry logic
+- Cost calculation (OpenAI: $0.15/$0.60 per M tokens, Google: $0.075/$0.30 per M tokens)
+
+**Spec features not implemented:**
+- **Unified `AIProviderAbstraction` orchestrator class:** The spec describes a top-level class with `query()`, `queryBatch()`, `queryMultiple()`, and provider management methods. The implementation has individual provider classes but no unified orchestrator — the analysis runner calls providers directly.
+- **Cost Tracker as a standalone service:** Cost is calculated per-request within each provider but there is no aggregate `CostSummary` tracker, no export functionality, and no cost alert thresholds.
+- **Provider health/status monitoring:** The `ProviderStatus` interface (health, latency percentiles, error rates) is not implemented.
+
+**Token counting is approximate:**
+Google provider estimates tokens as `text.length / 4`. OpenAI provider uses the API's returned token counts, so it's accurate for OpenAI but approximate for Google.
+
+**Future providers to consider:**
+- **Perplexity:** Their API supports search-grounded responses, making it directly relevant to attribution scoring (the AI response will include citations). This could provide a more realistic test of how search-augmented AI represents your site.
+- **Anthropic (Claude):** Would add another major provider. Claude's web search capabilities via the API would be another dimension to test.
+- **OpenAI with web search:** OpenAI now supports web search in their API, which would make the `supportsWebSearch` flag accurate and enable grounded responses from OpenAI.
 
 ---
 

@@ -9,13 +9,39 @@ export class ResponseAnalyzer {
     aiResponse: string,
     siteDomain: string
   ): Promise<ScoreBreakdown> {
-    // Generate embeddings for semantic similarity
-    const provider = createProvider('openai');
-    
-    const [responseEmbedding, ...claimEmbeddings] = await Promise.all([
-      provider.generateEmbedding(aiResponse),
-      ...expectedAnswer.keyClaims.map(claim => provider.generateEmbedding(claim)),
-    ]);
+    // Generate embeddings for semantic similarity (try OpenAI, fall back to Google)
+    let provider = createProvider('openai');
+    if (!provider.isAvailable()) {
+      provider = createProvider('google');
+    }
+
+    let responseEmbedding: number[];
+    let claimEmbeddings: number[][];
+    try {
+      const results = await Promise.all([
+        provider.generateEmbedding(aiResponse),
+        ...expectedAnswer.keyClaims.map(claim => provider.generateEmbedding(claim)),
+      ]);
+      responseEmbedding = results[0];
+      claimEmbeddings = results.slice(1);
+    } catch (error: any) {
+      if (provider.name === 'openai') {
+        console.log(`OpenAI embeddings failed (${error.message}), falling back to Google...`);
+        const fallback = createProvider('google');
+        if (fallback.isAvailable()) {
+          const results = await Promise.all([
+            fallback.generateEmbedding(aiResponse),
+            ...expectedAnswer.keyClaims.map(claim => fallback.generateEmbedding(claim)),
+          ]);
+          responseEmbedding = results[0];
+          claimEmbeddings = results.slice(1);
+        } else {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    }
 
     // Calculate accuracy score
     const accuracyResult = this.calculateAccuracy(

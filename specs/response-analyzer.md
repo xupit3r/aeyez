@@ -1,12 +1,36 @@
 ## Implementation Status
 
-✅ **Implemented** - Core functionality complete as of 2026-01-30
+⚠️ **Implemented with caveats** - All three scorers work, but completeness uses keyword matching instead of semantic similarity, and scoring methodology needs real-world validation
 
 See source code:
 - Database schema: `prisma/schema.prisma`
-- Services: `src/services/`
+- Services: `src/services/response-analyzer.ts`
 - CLI: `src/cli/index.ts`
 - Types: `src/types/index.ts`
+
+### Implementation Review (2026-01-30)
+
+**What works:**
+- Accuracy scoring via embedding cosine similarity (claims with similarity >0.7 count as accurate)
+- Completeness scoring via keyword/claim presence detection
+- Attribution scoring via URL (+60), domain (+30), and brand name (+10) detection, capped at 100
+- Detailed feedback with evidence for each scored claim
+- Integration with analysis runner for batch processing
+
+**Accuracy scorer — functional but blunt:**
+The spec describes chunking long responses and comparing chunk-by-chunk. The implementation embeds key claims and the full response, then computes cosine similarity. The formula is `(accurate_claims / total) * 0.7 + avg_similarity * 0.3`. This works but is sensitive to the quality of the claims being compared. Since claims are currently just raw sentences (see ground-truth-extractor review), the accuracy score may not be meaningful. **This needs validation against real sites where you know what the "right" score should be.**
+
+**Completeness scorer — uses keyword matching, not semantic similarity:**
+The spec calls for embedding each claim and comparing via semantic similarity (threshold 0.75). The implementation uses case-insensitive substring matching instead: it checks whether keywords and claim text literally appear in the response. This means paraphrased mentions are missed. For example, if the ground truth says "founded in 2020" and the AI response says "established in 2020", the current implementation may not count it as found. The formula is `(mentioned_claims / required) * 0.7 + (keywords_found / required) * 0.3`.
+
+**Embeddings generated on-the-fly and discarded:**
+Both accuracy and completeness scorers generate embeddings per analysis run but don't persist them. Re-running analysis against the same ground truth regenerates identical embeddings at additional API cost. Wiring up the existing `insertEmbedding`/`findSimilarChunks` helpers would fix this.
+
+**Attribution scorer — solid for MVP:**
+The rule-based approach (URL > domain > brand) is practical and deterministic. The main limitation is that it can't detect indirect attribution (e.g., "according to a cloud computing company" when that company is yours). This is acceptable for now.
+
+**Scoring methodology is unvalidated:**
+The tier thresholds (excellent: 85+, good: 70+, fair: 50+, poor: <50) and scoring formulas are reasonable guesses but have not been tested against real sites with known-correct answers. The most important next step is to run the pipeline against 2-3 sites you know well and manually evaluate whether the scores match your expectations.
 
 ---
 

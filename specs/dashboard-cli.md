@@ -1,12 +1,35 @@
 ## Implementation Status
 
-✅ **Implemented** - Core functionality complete as of 2026-01-30
+⚠️ **CLI: Implemented** | **Web Dashboard: Not Started** | **API Server: Not Started**
 
 See source code:
-- Database schema: `prisma/schema.prisma`
-- Services: `src/services/`
 - CLI: `src/cli/index.ts`
+- Services: `src/services/`
 - Types: `src/types/index.ts`
+
+### Implementation Review (2026-01-30)
+
+**CLI — fully functional:**
+All core commands are implemented: `site:add`, `site:list`, `crawl`, `generate-queries`, `analyze`, `results`, `stats`, and a `pipeline` command that chains crawl → generate → analyze. Commands have proper options, error handling, and formatted output.
+
+**CLI differences from spec:**
+- Command names use colon-separated style (`site:add`) rather than the subcommand style specified (`sites add`). This is a minor naming convention difference.
+- No `--json`, `--quiet`, or `--verbose` global output format flags.
+- No `--export` flag on results.
+- No interactive prompts via Inquirer.js — all input is via command flags.
+
+**Web Dashboard — 0% implemented:**
+There is no frontend code, no Vue/Vuetify dependencies, no API routes, and no web server. The full dashboard spec (6 pages, WebSocket real-time updates, Chart.js charts, theme support) represents a major implementation effort.
+
+**Prerequisite: API server must be built first:**
+The dashboard spec assumes REST endpoints + WebSocket, but there is no HTTP server at all. Before building the Vue frontend, you need an Express/Fastify API layer that exposes the existing services over HTTP. The CLI currently calls services directly via in-process function calls. The `APIClient` interface in the Shared Components section of this spec can serve as the contract for those routes.
+
+**Recommended MVP approach for the dashboard:**
+Rather than building the full 6-page spec, consider starting with:
+1. An Express/Fastify API server exposing sites, runs, and results endpoints
+2. A single-page dashboard showing the latest run's scores with drill-down to per-query results
+3. Skip real-time WebSocket updates, trends visualization, and PDF export for now
+4. Alternatively, the CLI could generate a static HTML report as a lighter-weight option to validate the product concept before investing in a full web app
 
 ---
 

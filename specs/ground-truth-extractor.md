@@ -1,12 +1,36 @@
 ## Implementation Status
 
-✅ **Implemented** - Core functionality complete as of 2026-01-30
+⚠️ **Partially Implemented** - Crawler and chunker work, but claim extraction is a placeholder
 
 See source code:
 - Database schema: `prisma/schema.prisma`
-- Services: `src/services/`
+- Services: `src/services/crawler.ts`, `src/services/extractor.ts`, `src/services/ground-truth.ts`
 - CLI: `src/cli/index.ts`
 - Types: `src/types/index.ts`
+
+### Implementation Review (2026-01-30)
+
+**What works:**
+- Sitemap parsing with recursive index handling
+- Playwright-based crawling with JS rendering, rate limiting, timeout handling
+- HTML → chunk extraction via Cheerio with heading hierarchy and section typing
+- JSON-LD, OpenGraph, and meta tag extraction
+- Raw HTML stored to local filesystem
+- Site status tracking (PENDING → CRAWLING → READY/ERROR)
+
+**Critical gap — Claim extraction:**
+The spec calls for a hybrid NLP + LLM fact extractor producing structured subject/predicate/object triples with confidence scores. The current implementation (`ground-truth.ts`) simply splits text on sentence delimiters (`.!?`) and treats each sentence >20 characters as a "claim" with no subject/predicate/object parsing, no confidence scoring, and no claim type classification. This is the single highest-impact gap in the system because both completeness scoring and accuracy scoring depend on claim quality. Garbage claims produce garbage scores.
+
+**Recommended fix:** Use the existing OpenAI integration to send chunks with the LLM extraction prompt already defined in this spec (Section 4). The `QueryGeneratorService` already follows this pattern and can serve as a template. Start with LLM-only extraction; add NLP entity extraction later if cost becomes a concern.
+
+**Structured data extracted but unused:**
+The extractor pulls JSON-LD, OpenGraph, and meta tags from pages, but this data is never saved to the database or used for claim generation. This is low-hanging fruit — schema.org data often contains precise, structured facts (founding date, employee count, product names) that would produce high-quality claims without LLM costs.
+
+**Embeddings not generated during extraction:**
+The spec describes an embedding step after chunking. The Prisma schema and raw SQL helpers exist (`insertEmbedding`, `findSimilarChunks` in `db.ts`), but they are never called. Embeddings are generated on-the-fly during analysis and discarded. Persisting them would avoid redundant API calls across runs.
+
+**Token counting is approximate:**
+Token count uses `text.length / 4`, which can be off by 30-50% depending on content. Not critical for MVP but worth noting for cost estimates.
 
 ---
 

@@ -21,6 +21,47 @@ export class Crawler {
     }
   }
 
+  private async parseSitemapUrl(sitemapUrl: string): Promise<string[]> {
+    const response = await axios.get(sitemapUrl, {
+      timeout: config.crawl.timeout,
+      headers: {
+        'User-Agent': config.crawl.userAgent,
+      },
+    });
+
+    const parsed = await parseStringPromise(response.data);
+    const urls: string[] = [];
+
+    // Handle sitemap index
+    if (parsed.sitemapindex) {
+      const sitemaps = parsed.sitemapindex.sitemap || [];
+      for (const sitemap of sitemaps) {
+        const sitemapLoc = sitemap.loc?.[0];
+        if (sitemapLoc) {
+          try {
+            const childUrls = await this.parseSitemapUrl(sitemapLoc);
+            urls.push(...childUrls);
+          } catch (error) {
+            console.log(`Failed to fetch child sitemap ${sitemapLoc}:`, (error as Error).message);
+          }
+        }
+      }
+    }
+
+    // Handle urlset
+    if (parsed.urlset) {
+      const urlEntries = parsed.urlset.url || [];
+      for (const entry of urlEntries) {
+        const loc = entry.loc?.[0];
+        if (loc) {
+          urls.push(normalizeUrl(loc));
+        }
+      }
+    }
+
+    return urls;
+  }
+
   async fetchSitemap(domain: string): Promise<string[]> {
     const sitemapUrls = [
       `https://${domain}/sitemap.xml`,
@@ -30,40 +71,7 @@ export class Crawler {
 
     for (const sitemapUrl of sitemapUrls) {
       try {
-        const response = await axios.get(sitemapUrl, {
-          timeout: config.crawl.timeout,
-          headers: {
-            'User-Agent': config.crawl.userAgent,
-          },
-        });
-
-        const parsed = await parseStringPromise(response.data);
-        const urls: string[] = [];
-
-        // Handle sitemap index
-        if (parsed.sitemapindex) {
-          const sitemaps = parsed.sitemapindex.sitemap || [];
-          for (const sitemap of sitemaps) {
-            const sitemapLoc = sitemap.loc?.[0];
-            if (sitemapLoc) {
-              const childUrls = await this.fetchSitemap(sitemapLoc);
-              urls.push(...childUrls);
-            }
-          }
-        }
-
-        // Handle urlset
-        if (parsed.urlset) {
-          const urlEntries = parsed.urlset.url || [];
-          for (const entry of urlEntries) {
-            const loc = entry.loc?.[0];
-            const priority = entry.priority?.[0];
-            if (loc) {
-              urls.push(normalizeUrl(loc));
-            }
-          }
-        }
-
+        const urls = await this.parseSitemapUrl(sitemapUrl);
         return urls;
       } catch (error) {
         console.log(`Failed to fetch ${sitemapUrl}:`, (error as Error).message);

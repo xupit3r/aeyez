@@ -1,12 +1,40 @@
 ## Implementation Status
 
-✅ **Implemented** - Core functionality complete as of 2026-01-30
+⚠️ **Partially Implemented** - PostgreSQL schema complete, but embeddings/Redis/S3/job queue are unused
 
 See source code:
 - Database schema: `prisma/schema.prisma`
-- Services: `src/services/`
-- CLI: `src/cli/index.ts`
+- Lib: `src/lib/db.ts`, `src/lib/storage.ts`, `src/lib/redis.ts`
 - Types: `src/types/index.ts`
+
+### Implementation Review (2026-01-30)
+
+**What works:**
+- Full Prisma schema with all 9 models (Site, Page, Chunk, Embedding, Claim, Query, Run, Result, Settings)
+- Proper relationships, cascading deletes, and indexing
+- Local file storage for raw HTML
+- Database helper functions for vector operations (`insertEmbedding`, `findSimilarChunks` in `db.ts`)
+
+**Embeddings table — schema exists, never populated:**
+The `Embedding` model with `vector(1536)` is defined in the schema, and raw SQL helpers exist for insertion and similarity search. However, no code in the pipeline ever calls these functions. Embeddings are generated on-the-fly during analysis and discarded. This means:
+- Repeated analysis of the same ground truth regenerates identical embeddings (wasted API cost)
+- The semantic search capabilities designed for the dashboard are non-functional
+- The query clustering/dedup pipeline can't work without stored embeddings
+
+**Redis — configured but unused:**
+The `redis.ts` library file exists and `ioredis` is installed, but no service reads from or writes to Redis. The cache keys, job queues, rate limit keys, and pub/sub channels defined in this spec are not implemented. All operations run synchronously in the foreground.
+
+**BullMQ — installed but unused:**
+`bullmq` is in `package.json` dependencies. There are no job definitions, no worker processes, and no queue initialization code. All heavy operations (crawling, extraction, analysis) block the CLI process. This is acceptable for CLI usage but will become a problem when the dashboard needs to trigger long-running analyses in the background.
+
+**S3 storage — throws error:**
+`src/lib/storage.ts` has a code path for S3 that throws `"S3 storage not yet implemented. Use local storage for now."` The `@aws-sdk/client-s3` package is installed but unused.
+
+**Materialized views — not created:**
+The `site_score_summary` materialized view defined in this spec has not been created as a database migration. Summary scores are computed on the `Run` model's `summaryScores` JSON field instead, which works but doesn't provide the query-level aggregation described.
+
+**GIN indexes for JSONB — not created:**
+The indexes for querying inside `config`, `expectedAnswer`, and `feedback` JSON fields are not in the Prisma migrations. These would be needed once the dashboard starts filtering/searching within these fields.
 
 ---
 

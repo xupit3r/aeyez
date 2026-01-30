@@ -36,7 +36,7 @@
     "@ai-sdk/openai": "3.0.23",
     "@google/generative-ai": "0.24.1",
     "@paralleldrive/cuid2": "3.3.0",
-    "@prisma/client": "7.3.0",
+    "@prisma/client": "5.22.0",
     "@types/xml2js": "0.4.14",
     "ai": "6.0.62",
     "axios": "1.13.4",
@@ -48,7 +48,7 @@
     "ioredis": "5.9.2",
     "openai": "6.17.0",
     "playwright": "1.58.0",
-    "prisma": "7.3.0",
+    "prisma": "5.22.0",
     "xml2js": "0.6.2"
   }
 }

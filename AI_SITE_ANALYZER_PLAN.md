@@ -150,16 +150,16 @@ Help site owners understand **how AI agents represent their content** - focusing
 
 ## Technical Specifications
 
-Detailed specs for each core component are available in the `specs/` folder:
+Detailed specs for each core component are available in the `specs/` folder. Each spec includes an **Implementation Review** section documenting what was built, what gaps remain, and specific recommendations.
 
-| Component | Spec File | Status | Description |
-|-----------|-----------|--------|-------------|
-| Ground Truth Extractor | [`specs/ground-truth-extractor.md`](specs/ground-truth-extractor.md) | ✅ Draft | Crawls sites, extracts content in layers (raw → chunks → facts), stores in document + vector DB |
-| Query Generator | [`specs/query-generator.md`](specs/query-generator.md) | ✅ Draft | Generates test queries from ground truth + user topics, with expected answers for scoring |
-| Response Analyzer | [`specs/response-analyzer.md`](specs/response-analyzer.md) | ✅ Draft | Scores AI responses for accuracy, completeness, and attribution |
-| AI Provider Abstraction | [`specs/ai-provider-abstraction.md`](specs/ai-provider-abstraction.md) | ✅ Draft | Unified interface to OpenAI, Google Gemini (and future providers) with rate limiting and cost tracking |
-| Dashboard + CLI | [`specs/dashboard-cli.md`](specs/dashboard-cli.md) | ✅ Draft | Vue/Vuetify web dashboard + Commander.js CLI for power users |
-| Database & Storage | [`specs/database-storage.md`](specs/database-storage.md) | ✅ Draft | PostgreSQL + pgvector, Prisma ORM, Redis cache/queue, S3 file storage |
+| Component | Spec File | Impl Status | Key Gaps |
+|-----------|-----------|-------------|----------|
+| Ground Truth Extractor | [`specs/ground-truth-extractor.md`](specs/ground-truth-extractor.md) | ⚠️ Partial | Claim extraction is sentence-splitting placeholder; structured data extracted but unused; no embeddings generated |
+| Query Generator | [`specs/query-generator.md`](specs/query-generator.md) | ⚠️ Partial | LLM generation works; no clustering/dedup/variations; hardcoded prompt; no source tracking |
+| Response Analyzer | [`specs/response-analyzer.md`](specs/response-analyzer.md) | ⚠️ Caveats | All 3 scorers work; completeness uses keyword matching not semantic similarity; scoring unvalidated against real sites |
+| AI Provider Abstraction | [`specs/ai-provider-abstraction.md`](specs/ai-provider-abstraction.md) | ✅ Complete | OpenAI + Google working; no unified orchestrator class; consider Perplexity/Anthropic |
+| Dashboard + CLI | [`specs/dashboard-cli.md`](specs/dashboard-cli.md) | ⚠️ CLI only | CLI fully functional; web dashboard 0%; needs API server (Express/Fastify) before frontend |
+| Database & Storage | [`specs/database-storage.md`](specs/database-storage.md) | ⚠️ Partial | Schema complete; embeddings table never populated; Redis/BullMQ/S3 unused |
 
 ### Key Technical Decisions Made
 
@@ -195,7 +195,7 @@ Detailed specs for each core component are available in the `specs/` folder:
 
 ---
 
-## Next Steps
+## Completed Steps
 
 - [x] Decide on initial scope → **Multi-provider (OpenAI + Google)**
 - [x] Spec ground truth extractor
@@ -210,13 +210,53 @@ Detailed specs for each core component are available in the `specs/` folder:
 - [x] Implement response analyzer
 - [x] Implement analysis runner
 - [x] Build CLI interface
-- [ ] Build minimal dashboard to visualize results
-- [ ] Add embedding generation and vector search
-- [ ] Test with a few real sites to validate approach
+
+## Next Steps (Prioritized)
+
+### Priority 1: Validate with real sites
+- [ ] Run the full pipeline against 2-3 real sites you know well
+- [ ] Manually evaluate whether accuracy/completeness/attribution scores make sense
+- [ ] Document which scores feel correct and which feel off — this informs every other priority
+- [ ] Measure actual API costs per site analysis to understand economics
+
+### Priority 2: Fix claim extraction (highest-impact code change)
+- [ ] Replace sentence-splitting in `ground-truth.ts` with LLM-based extraction using the prompt template in the ground truth extractor spec (Section 4)
+- [ ] Generate structured claims with subject/predicate/object triples and confidence scores
+- [ ] Use extracted structured data (JSON-LD, OpenGraph) as an additional source of high-quality claims
+- [ ] Re-run analysis after fixing claims and compare score quality to Priority 1 baseline
+
+### Priority 3: Wire up embedding persistence
+- [ ] Call `insertEmbedding()` during ground truth extraction to persist chunk embeddings
+- [ ] Update response analyzer to check for existing embeddings before generating new ones
+- [ ] Enable `findSimilarChunks()` for semantic search in the query generator and analyzer
+- [ ] Upgrade completeness scorer from keyword matching to semantic similarity using stored embeddings
+
+### Priority 4: Add tests
+- [ ] Unit tests for response-analyzer.ts scoring logic (the core IP of the product)
+- [ ] Unit tests for claim extraction once it's upgraded
+- [ ] Integration test for the full pipeline against a fixture/mock site
+- [ ] Configure test framework (vitest or jest)
+
+### Priority 5: Build API server layer
+- [ ] Add Express or Fastify HTTP server exposing existing services as REST endpoints
+- [ ] Implement the `APIClient` interface from the dashboard-cli spec as the route contract
+- [ ] This is a prerequisite for the web dashboard and also useful for future webhook/API access
+
+### Priority 6: Build minimal dashboard
+- [ ] Single page showing latest run scores per site with drill-down to per-query results
+- [ ] Skip real-time WebSocket, trends, PDF export, and theme support for now
+- [ ] Consider whether a CLI-generated static HTML report would validate the concept faster
+
+### Lower priority (track but don't block on)
+- [ ] Wire up BullMQ for background job processing (needed once dashboard exists)
+- [ ] Add Perplexity provider (search-grounded responses are directly relevant to attribution)
+- [ ] Add Anthropic provider
+- [ ] Implement S3 storage backend
 - [ ] Add historical tracking and trends
+- [ ] Add query clustering/dedup using stored embeddings
 
 ---
 
 *Document created: 2026-01-30*
 *Last updated: 2026-01-30*
-*Status: Core Implementation Complete - Dashboard Next*
+*Status: Core CLI Pipeline Working - Validation & Claim Extraction Next*

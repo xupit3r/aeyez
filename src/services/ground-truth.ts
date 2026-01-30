@@ -43,9 +43,20 @@ export class GroundTruthService {
         const htmlPath = `sites/${siteId}/pages/${generateId()}/raw.html`;
         await this.storage.put(htmlPath, result.rawHtml);
 
-        // Save page record
-        await prisma.page.create({
-          data: {
+        // Save page record (upsert to handle re-runs)
+        await prisma.page.upsert({
+          where: {
+            siteId_url: { siteId, url: result.url },
+          },
+          update: {
+            title: result.title,
+            httpStatus: result.httpStatus,
+            etag: result.etag,
+            lastModified: result.lastModified,
+            rawHtmlPath: htmlPath,
+            crawledAt: result.crawledAt,
+          },
+          create: {
             siteId,
             url: result.url,
             title: result.title,
@@ -83,6 +94,18 @@ export class GroundTruthService {
 
   async extractContent(siteId: string): Promise<void> {
     console.log(`Extracting content for site ${siteId}...`);
+
+    // Clean up old chunks (and their claims) for re-runs
+    const oldChunks = await prisma.chunk.findMany({
+      where: { page: { siteId } },
+      select: { id: true },
+    });
+    if (oldChunks.length > 0) {
+      const chunkIds = oldChunks.map(c => c.id);
+      await prisma.claim.deleteMany({ where: { chunkId: { in: chunkIds } } });
+      await prisma.chunk.deleteMany({ where: { id: { in: chunkIds } } });
+      console.log(`Cleaned up ${oldChunks.length} old chunks and their claims`);
+    }
 
     // Get all pages for site
     const pages = await prisma.page.findMany({
